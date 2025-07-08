@@ -268,11 +268,11 @@ Please confirm this appointment. Thank you!`;
             <h1 className="text-3xl font-bold text-green-400">
               MatchVet AI Agent
             </h1>
-            <p className="text-black text-lg">Pakistan's Premier Veterinary Care Marketplace</p>
+            <p className="text-white text-lg">Pakistan's Premier Veterinary Care Marketplace</p>
           </div>
         </div>
         <div className="mt-4 bg-gradient-to-r from-lime-400/20 to-green-400/20 rounded-xl p-4 backdrop-blur">
-          <p className="text-sm font-semibold text-black">
+          <p className="text-sm font-semibold text-white">
             🎉 Special Discounts: 5% on Vaccinations & Checkups, 15% on Spaying, 10% on Others!
           </p>
         </div>
@@ -376,12 +376,12 @@ Please confirm this appointment. Thank you!`;
                     placeholder="e.g., Today 9:00 PM"
                     className="flex-1 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-lime-400 focus:border-lime-400 transition-all duration-200"
                   />
-                  <button
-                    onClick={handleDateTimeSubmit}
-                    className="bg-gradient-to-r from-lime-400 to-green-500 text-white px-6 py-3 rounded-xl hover:from-lime-500 hover:to-green-600 transition-all duration-200 font-bold shadow-lg transform hover:scale-105"
-                  >
-                    Next
-                  </button>
+                   <button
+                        onClick={handleDateTimeSubmit}
+                        className="w-full bg-gradient-to-r from-lime-400 to-green-500 text-white py-4 px-6 rounded-xl hover:from-lime-500 hover:to-green-600 transition-all duration-200 font-bold shadow-lg active:scale-95 touch-manipulation text-center flex items-center justify-center min-h-[48px]"
+                    >
+                        Next
+                    </button>
                 </div>
               </div>
             )}
