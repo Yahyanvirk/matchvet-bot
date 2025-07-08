@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageCircle, MapPin, Calendar, Phone, Mail, Check, Sparkles } from 'lucide-react';
+import { MessageCircle, MapPin, Calendar, Phone, Mail, Check } from 'lucide-react';
 
 const MatchVetBot = () => {
   const [currentStep, setCurrentStep] = useState(0);
@@ -260,10 +260,12 @@ Please confirm this appointment. Thank you!`;
     <div className="max-w-4xl mx-auto bg-gradient-to-br from-emerald-50 via-green-50 to-lime-50 min-h-screen">
       {/* Header */}
       <div className="bg-gradient-to-r from-[#2d3c3f] to-[#1a2426] text-white p-6 shadow-2xl">
-        <div className="flex items-center space-x-4">
-          <div className="bg-green-400/20 p-3 rounded-full">
-            <Sparkles className="w-8 h-8 text-green-400" />
-          </div>
+        <div className="flex items-center">
+            <img 
+              src="/MatchVet.png" 
+              alt="MatchVet Logo" 
+              className="w-10 h-10 object-contain"
+            />
           <div>
             <h1 className="text-3xl font-bold text-green-400">
               MatchVet AI Agent
