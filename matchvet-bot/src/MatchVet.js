@@ -262,7 +262,7 @@ Please confirm this appointment. Thank you!`;
       <div className="bg-gradient-to-r from-[#2d3c3f] to-[#1a2426] text-white p-6 shadow-2xl">
         <div className="flex items-center">
             <img 
-              src="/MatchVet.png" 
+              src="./MatchVet.png" 
               alt="MatchVet Logo" 
               className="w-10 h-10 object-contain"
             />
