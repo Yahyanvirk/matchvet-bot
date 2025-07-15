@@ -62,7 +62,7 @@ const MatchVetBot = () => {
     { id: 'clinic_19', name: 'Royal Care Pets Clinic', address: 'Valencia Town, Lahore' }
   ];
 
-  // New: Function to send Google Analytics 4 events
+  // Function to send Google Analytics 4 events (unchanged)
   const sendGAEvent = useCallback((eventName, eventParams = {}) => {
     if (window.gtag) {
       window.gtag('event', eventName, {
@@ -76,51 +76,52 @@ const MatchVetBot = () => {
     }
   }, [sessionId, bookingData]); // Depend on sessionId and bookingData to include updated info
 
-
-  // Combined tracking function (for Sheets and GA4)
-  const trackEvent = useCallback(async (eventType, eventData = {}) => {
-    // JSONP function to bypass CORS - MOVED INSIDE trackEvent
-    const sendToGoogleSheets = (data) => {
-      return new Promise((resolve) => {
-        const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
-        
-        const script = document.createElement('script');
-        const params = new URLSearchParams({
-          ...data,
-          callback: callbackName
-        });
-        
-        script.src = `${GOOGLE_SCRIPT_URL}?${params.toString()}`;
-        
-        window[callbackName] = function(response) {
-          document.body.removeChild(script);
-          delete window[callbackName];
-          resolve(response);
-        };
-        
-        script.onerror = function() {
-          document.body.removeChild(script);
-          delete window[callbackName];
-          resolve({ status: 'error', message: 'Network error' });
-        };
-        
-        document.body.appendChild(script);
+  // New: Function to send data to Google Sheets via JSONP
+  const sendDataToGoogleSheets = useCallback(async (eventType, dataToSend) => {
+    const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      const params = new URLSearchParams({
+        sessionId,
+        timestamp: new Date().toISOString(),
+        eventType, // Specific event type for Google Sheets
+        userAgent: navigator.userAgent,
+        ...dataToSend, // The specific data for this event
+        callback: callbackName
       });
-    };
 
+      script.src = `${GOOGLE_SCRIPT_URL}?${params.toString()}`;
+
+      window[callbackName] = function(response) {
+        document.body.removeChild(script);
+        delete window[callbackName];
+        resolve(response);
+      };
+
+      script.onerror = function() {
+        document.body.removeChild(script);
+        delete window[callbackName];
+        resolve({ status: 'error', message: 'Network error' });
+      };
+
+      document.body.appendChild(script);
+    });
+  }, [sessionId, GOOGLE_SCRIPT_URL]); // Dependencies for sendDataToGoogleSheets
+
+  // New: Function to save analytics events to local storage (replaces old trackEvent's local storage part)
+  const saveAnalyticsEvent = useCallback((eventType, eventData = {}) => {
     const timestamp = new Date().toISOString();
     const event = {
       sessionId,
       timestamp,
       eventType,
       userAgent: navigator.userAgent,
-      ...bookingData,
+      ...bookingData, // Always include current bookingData for local backup context
       ...eventData
     };
 
-    console.log('📊 Analytics Event (Sheets/Local):', event);
+    console.log('📊 Analytics Event (Local Backup):', event);
 
-    // Save to localStorage for backup
     try {
       const existingData = JSON.parse(localStorage.getItem('matchvet_analytics_backup') || '[]');
       existingData.push(event);
@@ -128,35 +129,24 @@ const MatchVetBot = () => {
     } catch (storageError) {
       console.warn('localStorage save failed:', storageError);
     }
-
-    // Send to Google Sheets (if you still need this)
-    try {
-      const result = await sendToGoogleSheets(event); // sendToGoogleSheets is now defined within this scope
-      if (result.status === 'success') {
-        console.log('✅ Event sent to Google Sheets successfully');
-      }
-    } catch (error) {
-      console.warn('❌ Google Sheets error (data saved locally):', error);
-    }
-  }, [sessionId, bookingData]); // GOOGLE_SCRIPT_URL is a constant, so it's fine.
+  }, [sessionId, bookingData]); // Dependencies for saveAnalyticsEvent
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Track only session start - once per user
+  // Track only session start for local storage and GA4 (not Google Sheets)
   useEffect(() => {
-    trackEvent('session_start', {
+    saveAnalyticsEvent('session_start', {
       language: navigator.language,
       viewport: { width: window.innerWidth, height: window.innerHeight }
     });
-    // GA4: Also send a custom event for session_start
     sendGAEvent('chatbot_session_start', {
       language: navigator.language,
       viewport_width: window.innerWidth, // Use snake_case for GA4 parameters
       viewport_height: window.innerHeight
     });
-  }, [trackEvent, sendGAEvent]); // Include sendGAEvent in dependencies
+  }, [saveAnalyticsEvent, sendGAEvent]); // Updated dependencies
 
   const getDiscountRate = (serviceName) => {
     if (serviceName.includes('Vaccination') || serviceName.includes('Check-up')) {
@@ -219,6 +209,7 @@ Please confirm this appointment. Thank you!`;
     if (!bookingData.ownerName.trim()) return;
 
     addMessage('user', bookingData.ownerName);
+    saveAnalyticsEvent('owner_name_submitted', { owner_name: bookingData.ownerName }); // Save locally
     // GA4 Event: User provided name
     sendGAEvent('chatbot_step_completed', {
       step_name: 'owner_name_submitted',
@@ -235,6 +226,7 @@ Please confirm this appointment. Thank you!`;
   const handleServiceSelect = (service) => {
     setBookingData(prev => ({ ...prev, service }));
     addMessage('user', service);
+    saveAnalyticsEvent('service_selected', { service_name: service }); // Save locally
     // GA4 Event: Service selected
     sendGAEvent('chatbot_step_completed', {
       step_name: 'service_selected',
@@ -263,6 +255,13 @@ Please confirm this appointment. Thank you!`;
       const discountText = getDiscountText(bookingData.service);
 
       priceMessage = `🎉 **${discountText}**\n\n**${bookingData.service} ${type === 'clinic' ? 'at clinic' : 'at home'}:**\n• Original Price: ~~Rs ${originalPrice}~~\n• **Our Price: Rs ${discountedPrice}**\n• **With Special Discount: Rs ${finalPrice}**`;
+      saveAnalyticsEvent('appointment_type_selected', { // Save locally
+        appointment_type: type,
+        service_name: bookingData.service,
+        original_price: originalPrice,
+        discounted_price: discountedPrice,
+        final_price: finalPrice
+      });
       // GA4 Event: Appointment type selected with price details
       sendGAEvent('chatbot_step_completed', {
         step_name: 'appointment_type_selected',
@@ -282,12 +281,23 @@ Please confirm this appointment. Thank you!`;
     }, 500);
   };
 
-  const handleClinicSelect = (clinicId) => {
+  const handleClinicSelect = async (clinicId) => {
     const selectedClinic = vetClinics.find(c => c.id === clinicId);
     if (!selectedClinic) return;
 
-    setBookingData(prev => ({ ...prev, clinic: clinicId, location: selectedClinic.address }));
+    const newBookingData = { ...bookingData, clinic: clinicId, location: selectedClinic.address };
+    setBookingData(newBookingData);
     addMessage('user', selectedClinic.name);
+
+    // Send to Google Sheets for midway progress (after 4 fields for clinic)
+    await sendDataToGoogleSheets('mid_booking_progress_clinic', {
+      ownerName: newBookingData.ownerName,
+      service: newBookingData.service,
+      appointmentType: newBookingData.appointmentType,
+      clinic: selectedClinic.name,
+      location: selectedClinic.address
+    });
+    saveAnalyticsEvent('clinic_selected', { clinic_id: clinicId, clinic_name: selectedClinic.name, clinic_address: selectedClinic.address }); // Save locally
     // GA4 Event: Clinic selected
     sendGAEvent('chatbot_step_completed', {
       step_name: 'clinic_selected',
@@ -303,10 +313,19 @@ Please confirm this appointment. Thank you!`;
     }, 500);
   };
 
-  const handleLocationSubmit = () => {
+  const handleLocationSubmit = async () => {
     if (!bookingData.location.trim()) return;
 
     addMessage('user', bookingData.location);
+
+    // Send to Google Sheets for midway progress (after 4 fields for home)
+    await sendDataToGoogleSheets('mid_booking_progress_home', {
+      ownerName: bookingData.ownerName,
+      service: bookingData.service,
+      appointmentType: bookingData.appointmentType,
+      location: bookingData.location
+    });
+    saveAnalyticsEvent('location_submitted', { location: bookingData.location }); // Save locally
     // GA4 Event: Location submitted (for home visits)
     sendGAEvent('chatbot_step_completed', {
       step_name: 'location_submitted',
@@ -332,7 +351,8 @@ Please confirm this appointment. Thank you!`;
     const discountText = getDiscountText(bookingData.service);
 
     const summary = `📋 **Booking Summary:**\n• **Pet Owner:** ${bookingData.ownerName}\n• **Service:** ${bookingData.service}\n• **Type:** ${bookingData.appointmentType === 'clinic' ? 'At Clinic' : 'At Home'}\n• **Price:** Rs ${finalPrice} (${discountText})\n• **Location:** ${bookingData.appointmentType === 'clinic' ? (vetClinics.find(c => c.id === bookingData.clinic)?.name || bookingData.location) : bookingData.location}\n• **Date & Time:** ${bookingData.dateTime}\n\nPlease provide your phone number and email address for confirmation.`;
-    
+
+    saveAnalyticsEvent('datetime_submitted', { date_time: bookingData.dateTime }); // Save locally
     // GA4 Event: Date & Time submitted
     sendGAEvent('chatbot_step_completed', {
       step_name: 'datetime_submitted',
@@ -357,8 +377,8 @@ Please confirm this appointment. Thank you!`;
     const discountRate = getDiscountRate(bookingData.service);
     const finalPrice = price ? Math.round(price * discountRate) : 'Pending';
 
-    // Track only the completed booking for your custom Sheets/local storage
-    await trackEvent('booking_completed', {
+    // Save to local storage for backup (all details)
+    saveAnalyticsEvent('booking_completed', {
       ownerName: bookingData.ownerName,
       service: bookingData.service,
       appointmentType: bookingData.appointmentType,
@@ -371,7 +391,21 @@ Please confirm this appointment. Thank you!`;
       completedAt: new Date().toISOString()
     });
 
-    // GA4 Event: Final booking completed
+    // Send to Google Sheets for final booking confirmation
+    await sendDataToGoogleSheets('final_booking_confirmation', {
+      ownerName: bookingData.ownerName,
+      service: bookingData.service,
+      appointmentType: bookingData.appointmentType,
+      clinic: bookingData.clinic,
+      location: bookingData.location,
+      dateTime: bookingData.dateTime,
+      phone: bookingData.phone,
+      email: bookingData.email,
+      finalPrice: finalPrice,
+      completedAt: new Date().toISOString()
+    });
+
+    // GA4 Event: Final booking completed (unchanged)
     sendGAEvent('booking_completed', {
       owner_name: bookingData.ownerName,
       service_name: bookingData.service,
@@ -410,7 +444,8 @@ Please confirm this appointment. Thank you!`;
         content: "Hi! 👋 I'm MatchVetBot. I'll help you book a vet appointment in less than 2 minutes. First, what's your name?"
       }
     ]);
-    // GA4 Event: Chat reset
+    saveAnalyticsEvent('chatbot_reset'); // Save locally
+    // GA4 Event: Chat reset (unchanged)
     sendGAEvent('chatbot_reset');
   };
 
@@ -427,11 +462,14 @@ Please confirm this appointment. Thank you!`;
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       console.log('📥 Analytics data exported successfully');
-      // GA4 Event: Analytics exported
+      saveAnalyticsEvent('analytics_exported'); // Save locally
+      // GA4 Event: Analytics exported (unchanged)
       sendGAEvent('analytics_exported');
     } else {
-      alert('No backup analytics data found. Check Google Sheets for live data!');
-      // GA4 Event: Analytics export failed (no data)
+      // Replaced alert with a console warning and a more user-friendly message if this were a full UI
+      console.warn('No backup analytics data found. Check Google Sheets for live data!');
+      addMessage('bot', 'No local backup analytics data found. Data is primarily sent to Google Sheets for live tracking!');
+      // GA4 Event: Analytics export failed (no data) (unchanged)
       sendGAEvent('analytics_export_failed', { reason: 'no_data' });
     }
   };
@@ -647,7 +685,7 @@ Please confirm this appointment. Thank you!`;
           <div className="flex items-center space-x-3">
             <div className="bg-green-400/20 p-2 rounded-full flex items-center justify-center">
               <img
-                src="./MatchVet.png"
+                src="https://placehold.co/24x24/000000/FFFFFF?text=MV" // Placeholder for MatchVet Logo
                 alt="MatchVet Logo"
                 className="w-6 h-6 object-contain"
               />
